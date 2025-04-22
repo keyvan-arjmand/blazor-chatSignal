@@ -1,0 +1,62 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+<h3 class="chat-title">💬 Blazor Chat</h3>
+
+<div class="chat-container">
+    <div class="chat-messages">
+        @foreach (var msg in messages)
+        {
+            <div class="chat-bubble @(msg.User == userInput ? "self" : "other")">
+                <strong>@msg.User:</strong> @msg.Text
+            </div>
+        }
+    </div>
+
+    <div class="chat-input">
+        <input @bind="userInput" class="username-input" placeholder="Your name..." />
+        <input @bind="messageInput" class="message-box" placeholder="Type a message..." @onkeypress="HandleKeyPress" />
+        <button @onclick="SendMessage" class="send-btn">Send</button>
+    </div>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private string userInput = "User";
+    private string messageInput;
+    private List<(string User, string Text)> messages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            messages.Add((user, message));
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(messageInput))
+        {
+            await hubConnection.SendAsync("SendMessage", userInput, messageInput);
+            messageInput = string.Empty;
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+}
